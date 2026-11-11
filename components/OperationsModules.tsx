@@ -11,12 +11,13 @@ import {
 } from 'firebase/firestore';
 import {
   db,
-  auth,
+  getActiveAdminUser,
   OperationType,
   handleFirestoreError,
   generateSafeId,
   recordActivityLog,
 } from '@/lib/firebase';
+import { getStoredCollection, saveStoredCollection } from '@/lib/local-db';
 import {
   OrderRecord,
   ORDER_WORKFLOW_STAGES,
@@ -156,8 +157,7 @@ export function OrderManagementModule({
 
   const handleSaveOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     if (!formData.clientName.trim() || !formData.websiteDomain.trim()) {
       onNotify('Client Name and Publisher Website Domain are required.', 'error');
@@ -205,22 +205,35 @@ export function OrderManagementModule({
     };
 
     setIsSaving(true);
+    const targetId = editingOrder ? editingOrder.id : generateSafeId('ord');
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<OrderRecord>('orders', []);
+    const updatedRecord: OrderRecord = {
+      id: targetId,
+      ...payload,
+    };
+    const updatedList = editingOrder
+      ? currentList.map((o) => (o.id === targetId ? { ...o, ...payload } : o))
+      : [updatedRecord, ...currentList];
+    saveStoredCollection('orders', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       if (editingOrder) {
-        await updateDoc(doc(db, 'orders', editingOrder.id), {
+        await updateDoc(doc(db, 'orders', targetId), {
           ...payload,
           updatedAt: serverTimestamp(),
         });
         await recordActivityLog(
           'Orders',
           'Updated Order',
-          editingOrder.id,
+          targetId,
           `Updated ${orderNum} (${payload.websiteDomain}) — Stage: ${payload.status}`
         );
         onNotify(`Updated order ${orderNum}.`, 'success');
       } else {
-        const newId = generateSafeId('ord');
-        await setDoc(doc(collection(db, 'orders'), newId), {
+        await setDoc(doc(collection(db, 'orders'), targetId), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -228,7 +241,7 @@ export function OrderManagementModule({
         await recordActivityLog(
           'Orders',
           'Created Order',
-          newId,
+          targetId,
           `Created ${orderNum} for ${payload.clientName} on ${payload.websiteDomain}`
         );
         onNotify(`Created order ${orderNum}.`, 'success');
@@ -240,6 +253,7 @@ export function OrderManagementModule({
         editingOrder ? OperationType.UPDATE : OperationType.CREATE,
         'orders'
       );
+      setIsModalOpen(false);
     } finally {
       setIsSaving(false);
     }
@@ -250,6 +264,14 @@ export function OrderManagementModule({
       newStage === 'DELIVERED' && !order.deliveryDate
         ? new Date().toISOString().slice(0, 10)
         : order.deliveryDate;
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<OrderRecord>('orders', []);
+    const updatedList = currentList.map((o) =>
+      o.id === order.id ? { ...o, status: newStage, deliveryDate: newDeliveryDate } : o
+    );
+    saveStoredCollection('orders', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
 
     try {
       await updateDoc(doc(db, 'orders', order.id), {
@@ -271,6 +293,12 @@ export function OrderManagementModule({
 
   const handleDeleteOrder = async (id: string) => {
     const target = orders.find((o) => o.id === id);
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<OrderRecord>('orders', []);
+    saveStoredCollection('orders', currentList.filter((o) => o.id !== id));
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, 'orders', id));
       await recordActivityLog(
@@ -283,6 +311,7 @@ export function OrderManagementModule({
       onNotify('Order deleted.', 'info');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `orders/${id}`);
+      setDeleteConfirmId(null);
     }
   };
 
@@ -1001,8 +1030,7 @@ export function EmailAssistantModule({
   const handleSaveDraft = async (
     statusOverride: OutreachRecord['status'] = 'Draft Saved'
   ) => {
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     if (!subject.trim() || !body.trim()) {
       onNotify('Subject and email body are required.', 'error');
@@ -1021,6 +1049,20 @@ export function EmailAssistantModule({
     };
 
     setIsSaving(true);
+    const targetId = editingDraftId || generateSafeId('out');
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<OutreachRecord>('outreach', []);
+    const updatedRecord: OutreachRecord = {
+      id: targetId,
+      ...payload,
+    };
+    const updatedList = editingDraftId
+      ? currentList.map((o) => (o.id === targetId ? { ...o, ...payload } : o))
+      : [updatedRecord, ...currentList];
+    saveStoredCollection('outreach', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       if (editingDraftId) {
         await updateDoc(doc(db, 'outreach', editingDraftId), {
@@ -1035,17 +1077,16 @@ export function EmailAssistantModule({
         );
         onNotify(`Updated outreach draft (${statusOverride}).`, 'success');
       } else {
-        const newId = generateSafeId('out');
-        await setDoc(doc(collection(db, 'outreach'), newId), {
+        await setDoc(doc(collection(db, 'outreach'), targetId), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        setEditingDraftId(newId);
+        setEditingDraftId(targetId);
         await recordActivityLog(
           'Email Assistant',
           `Saved Outreach (${statusOverride})`,
-          newId,
+          targetId,
           `${category} to ${payload.recipientEmail || payload.recipientName}`
         );
         onNotify(`Saved outreach record as "${statusOverride}".`, 'success');
@@ -1070,6 +1111,11 @@ export function EmailAssistantModule({
   };
 
   const handleDeleteOutreach = async (id: string) => {
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<OutreachRecord>('outreach', []);
+    saveStoredCollection('outreach', currentList.filter((o) => o.id !== id));
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, 'outreach', id));
       if (editingDraftId === id) setEditingDraftId(null);
@@ -1443,39 +1489,76 @@ export function BacklinkVerificationAndReportsModule({
       };
       setLastResult(resultObj);
 
-      // Save to Firestore deliveries collection and update linked order if selected
-      const user = auth.currentUser;
-      if (user) {
-        const linkedOrder = orders.find((o) => o.id === selectedOrderId);
-        const delivId = generateSafeId('del');
+      // Save to local storage & Firestore deliveries collection and update linked order if selected
+      const user = getActiveAdminUser();
+      const linkedOrder = orders.find((o) => o.id === selectedOrderId);
+      const delivId = generateSafeId('del');
+
+      const deliveryPayload: DeliveryRecord = {
+        id: delivId,
+        ownerId: user.uid,
+        orderId: selectedOrderId || '',
+        orderNumber: linkedOrder?.orderNumber || `VER-${Date.now().toString().slice(-5)}`,
+        clientName: (clientName.trim() || linkedOrder?.clientName || 'Direct Check').slice(
+          0,
+          150
+        ),
+        clientEmail: clientEmail.trim().slice(0, 254),
+        publisherWebsite: (
+          publisherWebsite.trim() ||
+          linkedOrder?.websiteDomain ||
+          publishedUrl.trim()
+        ).slice(0, 253),
+        publishedArticleUrl: publishedUrl.trim().slice(0, 500),
+        targetUrl: targetUrl.trim().slice(0, 500),
+        anchorText: expectedAnchorText.trim().slice(0, 250),
+        backlinkType: resultObj.backlinkType.slice(0, 60),
+        relAttribute: resultObj.relAttribute.slice(0, 100),
+        httpStatus: resultObj.httpStatus,
+        pageAccessible: resultObj.pageAccessible,
+        targetLinkFound: resultObj.targetLinkFound,
+        anchorMatched: resultObj.anchorMatched,
+        verificationStatus: resultObj.verificationStatus,
+        verifiedAt: verifiedTimestamp.slice(0, 50),
+        orderDate: orderDate.slice(0, 50),
+        deliveryDate: deliveryDate.slice(0, 50),
+        notes: (notes.trim() || resultObj.message).slice(0, 2000),
+      };
+
+      // 1. Update local storage immediately
+      const curDeliveries = getStoredCollection<DeliveryRecord>('deliveries', []);
+      saveStoredCollection('deliveries', [deliveryPayload, ...curDeliveries]);
+
+      if (linkedOrder) {
+        const curOrders = getStoredCollection<OrderRecord>('orders', []);
+        const mappedOrderVerification: OrderRecord['backlinkVerificationStatus'] =
+          resultObj.verificationStatus === 'Verified'
+            ? 'Verified'
+            : resultObj.verificationStatus === 'Link Missing'
+            ? 'Link Missing'
+            : 'Verification Inconclusive';
+        const updatedOrders = curOrders.map((o) =>
+          o.id === linkedOrder.id
+            ? {
+                ...o,
+                publicationUrl: publishedUrl.trim().slice(0, 500),
+                backlinkVerificationStatus: mappedOrderVerification,
+                backlinkRelAttribute: resultObj.relAttribute.slice(0, 100),
+                lastVerifiedAt: verifiedTimestamp.slice(0, 50),
+                status:
+                  resultObj.verificationStatus === 'Verified'
+                    ? ('BACKLINK VERIFIED' as const)
+                    : o.status,
+              }
+            : o
+        );
+        saveStoredCollection('orders', updatedOrders);
+      }
+      window.dispatchEvent(new Event('guestpilot-db-update'));
+
+      try {
         await setDoc(doc(collection(db, 'deliveries'), delivId), {
-          ownerId: user.uid,
-          orderId: selectedOrderId || '',
-          orderNumber: linkedOrder?.orderNumber || `VER-${Date.now().toString().slice(-5)}`,
-          clientName: (clientName.trim() || linkedOrder?.clientName || 'Direct Check').slice(
-            0,
-            150
-          ),
-          clientEmail: clientEmail.trim().slice(0, 254),
-          publisherWebsite: (
-            publisherWebsite.trim() ||
-            linkedOrder?.websiteDomain ||
-            publishedUrl.trim()
-          ).slice(0, 253),
-          publishedArticleUrl: publishedUrl.trim().slice(0, 500),
-          targetUrl: targetUrl.trim().slice(0, 500),
-          anchorText: expectedAnchorText.trim().slice(0, 250),
-          backlinkType: resultObj.backlinkType.slice(0, 60),
-          relAttribute: resultObj.relAttribute.slice(0, 100),
-          httpStatus: resultObj.httpStatus,
-          pageAccessible: resultObj.pageAccessible,
-          targetLinkFound: resultObj.targetLinkFound,
-          anchorMatched: resultObj.anchorMatched,
-          verificationStatus: resultObj.verificationStatus,
-          verifiedAt: verifiedTimestamp.slice(0, 50),
-          orderDate: orderDate.slice(0, 50),
-          deliveryDate: deliveryDate.slice(0, 50),
-          notes: (notes.trim() || resultObj.message).slice(0, 2000),
+          ...deliveryPayload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -1506,6 +1589,8 @@ export function BacklinkVerificationAndReportsModule({
           delivId,
           `Checked ${publishedUrl.trim()} → ${targetUrl.trim()} (${resultObj.verificationStatus})`
         );
+      } catch (err) {
+        console.warn('Firestore delivery sync (local-first mode):', err);
       }
 
       onNotify(
@@ -1523,12 +1608,18 @@ export function BacklinkVerificationAndReportsModule({
   };
 
   const handleDeleteDelivery = async (id: string) => {
+    // 1. Immediately update local storage
+    const curDeliveries = getStoredCollection<DeliveryRecord>('deliveries', []);
+    saveStoredCollection('deliveries', curDeliveries.filter((d) => d.id !== id));
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, 'deliveries', id));
       setDeleteConfirmId(null);
       onNotify('Deleted delivery report.', 'info');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `deliveries/${id}`);
+      setDeleteConfirmId(null);
     }
   };
 

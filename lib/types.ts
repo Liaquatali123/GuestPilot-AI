@@ -223,6 +223,9 @@ export interface SettingRecord {
   updatedAt?: Timestamp | null;
 }
 
+export type UserSettings = SettingRecord;
+export type OutreachEmailRecord = OutreachRecord;
+
 export interface AdminRecord {
   id: string;
   uid: string;

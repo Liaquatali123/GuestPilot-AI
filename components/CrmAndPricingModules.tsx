@@ -11,12 +11,13 @@ import {
 } from 'firebase/firestore';
 import {
   db,
-  auth,
+  getActiveAdminUser,
   OperationType,
   handleFirestoreError,
   generateSafeId,
   recordActivityLog,
 } from '@/lib/firebase';
+import { getStoredCollection, saveStoredCollection } from '@/lib/local-db';
 import {
   ClientRecord,
   LeadRecord,
@@ -160,8 +161,7 @@ export function ClientCrmModule({
 
   const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     if (!clientForm.clientName.trim() || !clientForm.email.trim()) {
       onNotify('Client name and email are required.', 'error');
@@ -183,22 +183,35 @@ export function ClientCrmModule({
     };
 
     setIsSaving(true);
+    const targetId = editingClient ? editingClient.id : generateSafeId('cli');
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<ClientRecord>('clients', []);
+    const updatedRecord: ClientRecord = {
+      id: targetId,
+      ...payload,
+    };
+    const updatedList = editingClient
+      ? currentList.map((c) => (c.id === targetId ? { ...c, ...payload } : c))
+      : [updatedRecord, ...currentList];
+    saveStoredCollection('clients', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       if (editingClient) {
-        await updateDoc(doc(db, 'clients', editingClient.id), {
+        await updateDoc(doc(db, 'clients', targetId), {
           ...payload,
           updatedAt: serverTimestamp(),
         });
         await recordActivityLog(
           'Clients',
           'Updated Client',
-          editingClient.id,
+          targetId,
           `Updated client ${payload.clientName}`
         );
         onNotify(`Updated client ${payload.clientName}.`, 'success');
       } else {
-        const newId = generateSafeId('cli');
-        await setDoc(doc(collection(db, 'clients'), newId), {
+        await setDoc(doc(collection(db, 'clients'), targetId), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -206,7 +219,7 @@ export function ClientCrmModule({
         await recordActivityLog(
           'Clients',
           'Created Client',
-          newId,
+          targetId,
           `Added client ${payload.clientName}`
         );
         onNotify(`Added client ${payload.clientName}.`, 'success');
@@ -218,6 +231,7 @@ export function ClientCrmModule({
         editingClient ? OperationType.UPDATE : OperationType.CREATE,
         'clients'
       );
+      setIsClientModalOpen(false);
     } finally {
       setIsSaving(false);
     }
@@ -225,8 +239,7 @@ export function ClientCrmModule({
 
   const handleSaveLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     if (!leadForm.prospectName.trim()) {
       onNotify('Prospect name is required.', 'error');
@@ -252,22 +265,35 @@ export function ClientCrmModule({
     };
 
     setIsSaving(true);
+    const targetId = editingLead ? editingLead.id : generateSafeId('lead');
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<LeadRecord>('leads', []);
+    const updatedRecord: LeadRecord = {
+      id: targetId,
+      ...payload,
+    };
+    const updatedList = editingLead
+      ? currentList.map((l) => (l.id === targetId ? { ...l, ...payload } : l))
+      : [updatedRecord, ...currentList];
+    saveStoredCollection('leads', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       if (editingLead) {
-        await updateDoc(doc(db, 'leads', editingLead.id), {
+        await updateDoc(doc(db, 'leads', targetId), {
           ...payload,
           updatedAt: serverTimestamp(),
         });
         await recordActivityLog(
           'Leads',
           'Updated Lead',
-          editingLead.id,
+          targetId,
           `Updated lead ${payload.prospectName}`
         );
         onNotify(`Updated lead ${payload.prospectName}.`, 'success');
       } else {
-        const newId = generateSafeId('lead');
-        await setDoc(doc(collection(db, 'leads'), newId), {
+        await setDoc(doc(collection(db, 'leads'), targetId), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -275,7 +301,7 @@ export function ClientCrmModule({
         await recordActivityLog(
           'Leads',
           'Created Lead',
-          newId,
+          targetId,
           `Added new lead ${payload.prospectName}`
         );
         onNotify(`Added lead ${payload.prospectName}.`, 'success');
@@ -287,28 +313,45 @@ export function ClientCrmModule({
         editingLead ? OperationType.UPDATE : OperationType.CREATE,
         'leads'
       );
+      setIsLeadModalOpen(false);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleConvertLeadToClient = async (lead: LeadRecord) => {
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
     const newClientId = generateSafeId('cli');
+
+    const newClient: ClientRecord = {
+      id: newClientId,
+      ownerId: user.uid,
+      clientName: lead.prospectName,
+      email: lead.email || 'pending@client.com',
+      company: lead.company,
+      country: lead.country,
+      website: lead.website,
+      requiredNiche: lead.requiredNiche,
+      budget: lead.estimatedBudget,
+      requirements: lead.requirements,
+      leadStatus: 'Active Client',
+      notes: `Converted from Lead (${lead.source}). ${lead.notes}`.slice(0, 2000),
+    };
+
+    // 1. Immediately update local storage
+    const clientsList = getStoredCollection<ClientRecord>('clients', []);
+    saveStoredCollection('clients', [newClient, ...clientsList]);
+
+    const leadsList = getStoredCollection<LeadRecord>('leads', []);
+    saveStoredCollection(
+      'leads',
+      leadsList.map((l) => (l.id === lead.id ? { ...l, status: 'Converted' } : l))
+    );
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await setDoc(doc(collection(db, 'clients'), newClientId), {
-        ownerId: user.uid,
-        clientName: lead.prospectName,
-        email: lead.email || 'pending@client.com',
-        company: lead.company,
-        country: lead.country,
-        website: lead.website,
-        requiredNiche: lead.requiredNiche,
-        budget: lead.estimatedBudget,
-        requirements: lead.requirements,
-        leadStatus: 'Active Client',
-        notes: `Converted from Lead (${lead.source}). ${lead.notes}`.slice(0, 2000),
+        ...newClient,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -329,6 +372,16 @@ export function ClientCrmModule({
   };
 
   const handleDeleteRecord = async (collectionName: 'clients' | 'leads', id: string) => {
+    // 1. Immediately update local storage
+    if (collectionName === 'clients') {
+      const list = getStoredCollection<ClientRecord>('clients', []);
+      saveStoredCollection('clients', list.filter((c) => c.id !== id));
+    } else {
+      const list = getStoredCollection<LeadRecord>('leads', []);
+      saveStoredCollection('leads', list.filter((l) => l.id !== id));
+    }
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, collectionName, id));
       await recordActivityLog(
@@ -341,6 +394,7 @@ export function ClientCrmModule({
       onNotify('Record deleted.', 'info');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `${collectionName}/${id}`);
+      setDeleteConfirmId(null);
     }
   };
 
@@ -1203,8 +1257,7 @@ export function PricingAndProfitModule({
   };
 
   const handleCreateDocument = async (docType: 'Quotation' | 'Invoice') => {
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     const clientName = customClientName.trim();
     if (!clientName) {
@@ -1241,6 +1294,16 @@ export function PricingAndProfitModule({
     };
 
     setIsGenerating(true);
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<PaymentRecord>('payments', []);
+    const newRecord: PaymentRecord = {
+      id: newId,
+      ...payload,
+    };
+    saveStoredCollection('payments', [newRecord, ...currentList]);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await setDoc(doc(collection(db, 'payments'), newId), {
         ...payload,
@@ -1271,6 +1334,20 @@ export function PricingAndProfitModule({
     payment: PaymentRecord,
     newStatus: PaymentRecord['status']
   ) => {
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<PaymentRecord>('payments', []);
+    const updated = currentList.map((p) =>
+      p.id === payment.id
+        ? {
+            ...p,
+            status: newStatus,
+            paidAt: newStatus === 'Paid' ? new Date().toISOString().slice(0, 10) : p.paidAt,
+          }
+        : p
+    );
+    saveStoredCollection('payments', updated);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await updateDoc(doc(db, 'payments', payment.id), {
         status: newStatus,
@@ -1290,12 +1367,18 @@ export function PricingAndProfitModule({
   };
 
   const handleDeletePayment = async (id: string) => {
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<PaymentRecord>('payments', []);
+    saveStoredCollection('payments', currentList.filter((p) => p.id !== id));
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, 'payments', id));
       setDeleteConfirmId(null);
       onNotify('Deleted billing record.', 'info');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
+      setDeleteConfirmId(null);
     }
   };
 

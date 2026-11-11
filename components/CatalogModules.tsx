@@ -11,12 +11,13 @@ import {
 } from 'firebase/firestore';
 import {
   db,
-  auth,
+  getActiveAdminUser,
   OperationType,
   handleFirestoreError,
   generateSafeId,
   recordActivityLog,
 } from '@/lib/firebase';
+import { getStoredCollection, saveStoredCollection } from '@/lib/local-db';
 import {
   WebsiteRecord,
   SupplierRecord,
@@ -198,8 +199,7 @@ export function WebsiteManagementModule({
 
   const handleSaveWebsite = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     const normalizedDom = normalizeDomain(formData.domain || formData.websiteUrl);
     if (!normalizedDom || normalizedDom.length < 3) {
@@ -237,9 +237,23 @@ export function WebsiteManagementModule({
     };
 
     setIsSaving(true);
+    const targetId = editingWebsite ? editingWebsite.id : generateSafeId('web');
+
+    // 1. Immediately update local storage for 0ms UI update
+    const currentList = getStoredCollection<WebsiteRecord>('websites', []);
+    const updatedRecord: WebsiteRecord = {
+      id: targetId,
+      ...payload,
+    };
+    const updatedList = editingWebsite
+      ? currentList.map((w) => (w.id === targetId ? { ...w, ...payload } : w))
+      : [updatedRecord, ...currentList];
+    saveStoredCollection('websites', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       if (editingWebsite) {
-        const docRef = doc(db, 'websites', editingWebsite.id);
+        const docRef = doc(db, 'websites', targetId);
         await updateDoc(docRef, {
           ...payload,
           updatedAt: serverTimestamp(),
@@ -247,13 +261,12 @@ export function WebsiteManagementModule({
         await recordActivityLog(
           'Websites',
           'Updated Website',
-          editingWebsite.id,
+          targetId,
           `Updated publisher domain ${payload.domain}`
         );
         onNotify(`Updated ${payload.domain} in inventory.`, 'success');
       } else {
-        const newId = generateSafeId('web');
-        const docRef = doc(collection(db, 'websites'), newId);
+        const docRef = doc(collection(db, 'websites'), targetId);
         await setDoc(docRef, {
           ...payload,
           createdAt: serverTimestamp(),
@@ -262,7 +275,7 @@ export function WebsiteManagementModule({
         await recordActivityLog(
           'Websites',
           'Added Website',
-          newId,
+          targetId,
           `Added publisher domain ${payload.domain}`
         );
         onNotify(`Added ${payload.domain} to inventory.`, 'success');
@@ -274,6 +287,8 @@ export function WebsiteManagementModule({
         editingWebsite ? OperationType.UPDATE : OperationType.CREATE,
         'websites'
       );
+      // Even if Firestore throws, local storage saved it successfully
+      setIsModalOpen(false);
     } finally {
       setIsSaving(false);
     }
@@ -281,6 +296,12 @@ export function WebsiteManagementModule({
 
   const handleConfirmDelete = async (id: string) => {
     const target = websites.find((w) => w.id === id);
+
+    // 1. Update local storage immediately
+    const currentList = getStoredCollection<WebsiteRecord>('websites', []);
+    saveStoredCollection('websites', currentList.filter((w) => w.id !== id));
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, 'websites', id));
       await recordActivityLog(
@@ -358,8 +379,7 @@ export function WebsiteManagementModule({
   const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     const text = await file.text();
     const lines = text
@@ -1184,8 +1204,7 @@ export function SupplierManagementModule({
 
   const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) return;
+    const user = getActiveAdminUser();
 
     if (!formData.supplierName.trim() || !formData.email.trim()) {
       onNotify('Supplier name and contact email are required.', 'error');
@@ -1212,22 +1231,35 @@ export function SupplierManagementModule({
     };
 
     setIsSaving(true);
+    const targetId = editingSupplier ? editingSupplier.id : generateSafeId('sup');
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<SupplierRecord>('suppliers', []);
+    const updatedRecord: SupplierRecord = {
+      id: targetId,
+      ...payload,
+    };
+    const updatedList = editingSupplier
+      ? currentList.map((s) => (s.id === targetId ? { ...s, ...payload } : s))
+      : [updatedRecord, ...currentList];
+    saveStoredCollection('suppliers', updatedList);
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       if (editingSupplier) {
-        await updateDoc(doc(db, 'suppliers', editingSupplier.id), {
+        await updateDoc(doc(db, 'suppliers', targetId), {
           ...payload,
           updatedAt: serverTimestamp(),
         });
         await recordActivityLog(
           'Suppliers',
           'Updated Supplier',
-          editingSupplier.id,
+          targetId,
           `Updated supplier ${payload.supplierName}`
         );
         onNotify(`Updated supplier ${payload.supplierName}.`, 'success');
       } else {
-        const newId = generateSafeId('sup');
-        await setDoc(doc(collection(db, 'suppliers'), newId), {
+        await setDoc(doc(collection(db, 'suppliers'), targetId), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -1235,7 +1267,7 @@ export function SupplierManagementModule({
         await recordActivityLog(
           'Suppliers',
           'Added Supplier',
-          newId,
+          targetId,
           `Added supplier ${payload.supplierName}`
         );
         onNotify(`Added supplier ${payload.supplierName}.`, 'success');
@@ -1247,6 +1279,7 @@ export function SupplierManagementModule({
         editingSupplier ? OperationType.UPDATE : OperationType.CREATE,
         'suppliers'
       );
+      setIsModalOpen(false);
     } finally {
       setIsSaving(false);
     }
@@ -1254,6 +1287,12 @@ export function SupplierManagementModule({
 
   const handleDeleteSupplier = async (id: string) => {
     const target = suppliers.find((s) => s.id === id);
+
+    // 1. Immediately update local storage
+    const currentList = getStoredCollection<SupplierRecord>('suppliers', []);
+    saveStoredCollection('suppliers', currentList.filter((s) => s.id !== id));
+    window.dispatchEvent(new Event('guestpilot-db-update'));
+
     try {
       await deleteDoc(doc(db, 'suppliers', id));
       await recordActivityLog(
@@ -1266,6 +1305,7 @@ export function SupplierManagementModule({
       onNotify(`Removed supplier ${target?.supplierName || ''}.`, 'info');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `suppliers/${id}`);
+      setDeleteConfirmId(null);
     }
   };
 
