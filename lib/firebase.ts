@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   doc,
   getDocFromServer,
@@ -12,12 +13,36 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+function initFirestoreDb() {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        experimentalAutoDetectLongPolling: true,
+      },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch {
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+}
+
+export const db = initFirestoreDb();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'appbuilder078@gmail.com';
+export const BOOTSTRAPPED_ADMIN_EMAILS = [
+  'appbuilder078@gmail.com',
+  'rdxkinglucky@gmail.com',
+] as const;
+
+export function isBootstrappedAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const lower = email.trim().toLowerCase();
+  return BOOTSTRAPPED_ADMIN_EMAILS.some((allowed) => allowed.toLowerCase() === lower);
+}
 
 let connectionTested = false;
 
@@ -28,13 +53,15 @@ export async function testFirestoreConnection(): Promise<void> {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+      console.warn('Firestore initial connection check: waiting for long-polling transport.');
     }
   }
 }
 
 if (typeof window !== 'undefined') {
-  testFirestoreConnection();
+  setTimeout(() => {
+    testFirestoreConnection();
+  }, 1500);
 }
 
 export enum OperationType {

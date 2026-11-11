@@ -23,7 +23,8 @@ import {
   db,
   auth,
   googleProvider,
-  BOOTSTRAPPED_ADMIN_EMAIL,
+  BOOTSTRAPPED_ADMIN_EMAILS,
+  isBootstrappedAdminEmail,
   OperationType,
   handleFirestoreError,
   recordActivityLog,
@@ -142,6 +143,8 @@ export default function GuestPilotApp() {
     []
   );
 
+  const userProfileSyncedRef = React.useRef<string | null>(null);
+
   // Phase 1: Auth Listener & Explicit Admin Allowlist Check
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -149,6 +152,7 @@ export default function GuestPilotApp() {
       setAuthError(null);
 
       if (!currentUser) {
+        userProfileSyncedRef.current = null;
         setIsAuthorizedAdmin(false);
         setAuthLoading(false);
         setDataLoading(false);
@@ -158,7 +162,7 @@ export default function GuestPilotApp() {
       // Check explicit admin allowlist
       const isPrimaryAdmin =
         currentUser.emailVerified &&
-        currentUser.email?.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL.toLowerCase();
+        isBootstrappedAdminEmail(currentUser.email);
 
       let isSecondaryAdmin = false;
       if (!isPrimaryAdmin && currentUser.emailVerified) {
@@ -178,49 +182,6 @@ export default function GuestPilotApp() {
         return;
       }
 
-      if (currentUser.email) {
-        // Upsert user profile & initial workspace settings in Firestore before attaching listeners
-        try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            await setDoc(userRef, {
-              ownerId: currentUser.uid,
-              email: currentUser.email.slice(0, 254),
-              displayName: (currentUser.displayName || 'Administrator').slice(0, 120),
-              lastLoginAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          } else {
-            await updateDoc(userRef, {
-              email: currentUser.email.slice(0, 254),
-              displayName: (currentUser.displayName || 'Administrator').slice(0, 120),
-              lastLoginAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          }
-
-          const settingRef = doc(db, 'settings', currentUser.uid);
-          const settingSnap = await getDoc(settingRef);
-          if (!settingSnap.exists()) {
-            await setDoc(settingRef, {
-              ownerId: currentUser.uid,
-              businessName: 'GuestPilot AI Reseller Operations',
-              adminEmail: currentUser.email.slice(0, 254),
-              additionalAdminEmails: '',
-              defaultCurrency: 'USD',
-              defaultPaymentTerms: 'Due upon receipt',
-              invoiceFooterNotes: 'Thank you for your business.',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          }
-        } catch (err) {
-          console.error('Admin profile initialization error:', err);
-        }
-      }
-
       setIsAuthorizedAdmin(true);
       setAuthLoading(false);
     });
@@ -232,6 +193,40 @@ export default function GuestPilotApp() {
   useEffect(() => {
     if (!user || !isAuthorizedAdmin) return;
     const uid = user.uid;
+    const userEmail = (user.email || 'admin@guestpilot.app').slice(0, 254);
+    const userDisplayName = (user.displayName || 'Administrator').slice(0, 120);
+
+    // Resilient User Profile Sync via onSnapshot
+    const unsubUserProfile = onSnapshot(
+      doc(db, 'users', uid),
+      async (snap) => {
+        if (snap.metadata.fromCache) return;
+        if (userProfileSyncedRef.current === uid) return;
+        userProfileSyncedRef.current = uid;
+        try {
+          if (!snap.exists()) {
+            await setDoc(doc(db, 'users', uid), {
+              ownerId: uid,
+              email: userEmail,
+              displayName: userDisplayName,
+              lastLoginAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            await updateDoc(doc(db, 'users', uid), {
+              email: userEmail,
+              displayName: userDisplayName,
+              lastLoginAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, `users/${uid}`)
+    );
 
     const unsubWebsites = onSnapshot(
       query(collection(db, 'websites'), where('ownerId', '==', uid)),
@@ -313,7 +308,7 @@ export default function GuestPilotApp() {
 
     const unsubSettings = onSnapshot(
       doc(db, 'settings', uid),
-      (snap) => {
+      async (snap) => {
         if (snap.exists()) {
           const data = { id: snap.id, ...snap.data() } as SettingRecord;
           setSettings(data);
@@ -324,6 +319,22 @@ export default function GuestPilotApp() {
             defaultPaymentTerms: data.defaultPaymentTerms,
             invoiceFooterNotes: data.invoiceFooterNotes,
           }));
+        } else if (!snap.metadata.fromCache) {
+          try {
+            await setDoc(doc(db, 'settings', uid), {
+              ownerId: uid,
+              businessName: 'GuestPilot AI Reseller Operations',
+              adminEmail: userEmail,
+              additionalAdminEmails: '',
+              defaultCurrency: 'USD',
+              defaultPaymentTerms: 'Due upon receipt',
+              invoiceFooterNotes: 'Thank you for your business.',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.CREATE, `settings/${uid}`);
+          }
         }
       },
       (err) => handleFirestoreError(err, OperationType.GET, `settings/${uid}`)
@@ -356,6 +367,7 @@ export default function GuestPilotApp() {
     );
 
     return () => {
+      unsubUserProfile();
       unsubWebsites();
       unsubSuppliers();
       unsubClients();
@@ -580,7 +592,7 @@ export default function GuestPilotApp() {
             <div className="pt-4 border-t border-zinc-800/80 text-[11px] text-zinc-500 space-y-1">
               <div>Protected by Zero-Trust Cloud Firestore Security Rules</div>
               <div className="font-mono">
-                Authorized Admin: {BOOTSTRAPPED_ADMIN_EMAIL}
+                Authorized Admins: {BOOTSTRAPPED_ADMIN_EMAILS.join(', ')}
               </div>
             </div>
           </div>
@@ -1245,11 +1257,11 @@ export default function GuestPilotApp() {
                           Explicit Admin Allowlist (/admins Collection)
                         </h3>
                         <p className="text-xs text-zinc-400 mt-1">
-                          Primary Bootstrapped Admin:{' '}
+                          Bootstrapped Admins:{' '}
                           <code className="text-emerald-400 font-mono">
-                            {BOOTSTRAPPED_ADMIN_EMAIL}
+                            {BOOTSTRAPPED_ADMIN_EMAILS.join(', ')}
                           </code>{' '}
-                          (UID: <code className="font-mono">{user.uid}</code>)
+                          (Current UID: <code className="font-mono">{user.uid}</code>)
                         </p>
                       </div>
 
@@ -1304,7 +1316,7 @@ export default function GuestPilotApp() {
                         </div>
                         {adminAllowlist.length === 0 ? (
                           <p className="text-xs text-zinc-500">
-                            Only the primary bootstrapped administrator ({BOOTSTRAPPED_ADMIN_EMAIL}) is currently authorized.
+                            Only the bootstrapped administrators ({BOOTSTRAPPED_ADMIN_EMAILS.join(', ')}) are currently authorized.
                           </p>
                         ) : (
                           <div className="space-y-2">
