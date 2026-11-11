@@ -29,8 +29,25 @@ function initFirestoreDb() {
 
 export const db = initFirestoreDb();
 export const auth = getAuth(app);
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+export function createGoogleProvider(loginHintEmail?: string): GoogleAuthProvider {
+  const provider = new GoogleAuthProvider();
+  if (loginHintEmail && loginHintEmail.trim()) {
+    provider.setCustomParameters({
+      prompt: 'select_account',
+      login_hint: loginHintEmail.trim(),
+    });
+  } else {
+    provider.setCustomParameters({
+      prompt: 'select_account',
+    });
+  }
+  return provider;
+}
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'appbuilder078@gmail.com';
 export const BOOTSTRAPPED_ADMIN_EMAILS = [
