@@ -1,0 +1,6 @@
+{
+  "name": "GuestPilot AI",
+  "description": "Complete Guest Posting Reseller Business Management Software with real-time Firebase persistence, website & supplier catalogs, client CRM, pricing calculator, order pipeline, email assistant, SSRF-safe backlink verification, and PDF delivery reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

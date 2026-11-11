@@ -1,0 +1,388 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Explicitly authorized administrator record indexed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "addedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "addedBy", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Administrator user profile and session metadata.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "lastLoginAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "email", "displayName", "lastLoginAt", "createdAt", "updatedAt"]
+    },
+    "Website": {
+      "title": "Website",
+      "description": "Publisher website record in the guest posting inventory database.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "domain": { "type": "string", "maxLength": 253 },
+        "websiteUrl": { "type": "string", "maxLength": 500 },
+        "niche": { "type": "string", "maxLength": 100 },
+        "country": { "type": "string", "maxLength": 100 },
+        "language": { "type": "string", "maxLength": 100 },
+        "da": { "type": "number" },
+        "dr": { "type": "number" },
+        "organicTraffic": { "type": "number" },
+        "spamScore": { "type": "number" },
+        "metricsSource": { "type": "string", "maxLength": 120 },
+        "backlinkType": { "type": "string", "maxLength": 40, "enum": ["Dofollow", "Nofollow", "Sponsored", "Mixed", "Unknown"] },
+        "guestPostPrice": { "type": "number" },
+        "sponsoredPostPrice": { "type": "number" },
+        "contactEmail": { "type": "string", "maxLength": 254 },
+        "publisherName": { "type": "string", "maxLength": 150 },
+        "websiteStatus": { "type": "string", "maxLength": 40, "enum": ["Verified", "Pending Review", "Inactive", "Blacklisted"] },
+        "verificationDate": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "domain", "websiteUrl", "niche", "country", "language",
+        "da", "dr", "organicTraffic", "spamScore", "metricsSource",
+        "backlinkType", "guestPostPrice", "sponsoredPostPrice",
+        "contactEmail", "publisherName", "websiteStatus", "verificationDate",
+        "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Publisher or supplier record with wholesale pricing and quotation history.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "supplierName": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 254 },
+        "website": { "type": "string", "maxLength": 500 },
+        "country": { "type": "string", "maxLength": 100 },
+        "niche": { "type": "string", "maxLength": 100 },
+        "wholesalePrice": { "type": "number" },
+        "quotedPrice": { "type": "number" },
+        "quotationNotes": { "type": "string", "maxLength": 1000 },
+        "acceptedLinkTypes": { "type": "string", "maxLength": 120 },
+        "articleWordLimits": { "type": "string", "maxLength": 120 },
+        "publishingTime": { "type": "string", "maxLength": 100 },
+        "permanentLinkAvailability": { "type": "string", "maxLength": 40, "enum": ["Yes", "No", "12 Months", "Unknown"] },
+        "homepageLinkAvailability": { "type": "string", "maxLength": 40, "enum": ["Yes", "No", "Extra Fee", "Unknown"] },
+        "paymentStatus": { "type": "string", "maxLength": 40, "enum": ["Paid", "Unpaid", "Partial", "No Active Balance"] },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "supplierName", "email", "website", "country", "niche",
+        "wholesalePrice", "quotedPrice", "quotationNotes", "acceptedLinkTypes",
+        "articleWordLimits", "publishingTime", "permanentLinkAvailability",
+        "homepageLinkAvailability", "paymentStatus", "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client CRM record storing requirements, budget, and relationship status.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 254 },
+        "company": { "type": "string", "maxLength": 150 },
+        "country": { "type": "string", "maxLength": 100 },
+        "website": { "type": "string", "maxLength": 500 },
+        "requiredNiche": { "type": "string", "maxLength": 150 },
+        "budget": { "type": "number" },
+        "requirements": { "type": "string", "maxLength": 2000 },
+        "leadStatus": { "type": "string", "maxLength": 40, "enum": ["New Lead", "Contacted", "Quotation Sent", "Negotiating", "Active Client", "Inactive"] },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "clientName", "email", "company", "country", "website",
+        "requiredNiche", "budget", "requirements", "leadStatus", "notes",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Inbound or outbound prospect lead tracked prior to or alongside client conversion.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "prospectName": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 254 },
+        "company": { "type": "string", "maxLength": 150 },
+        "country": { "type": "string", "maxLength": 100 },
+        "website": { "type": "string", "maxLength": 500 },
+        "requiredNiche": { "type": "string", "maxLength": 150 },
+        "estimatedBudget": { "type": "number" },
+        "source": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "maxLength": 40, "enum": ["New", "Contacted", "Qualified", "Quotation Sent", "Converted", "Lost"] },
+        "requirements": { "type": "string", "maxLength": 2000 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "prospectName", "email", "company", "country", "website",
+        "requiredNiche", "estimatedBudget", "source", "status", "requirements",
+        "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Guest post order tracking the 11-stage reseller workflow, pricing, and backlink verification.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "websiteId": { "type": "string", "maxLength": 128 },
+        "websiteDomain": { "type": "string", "maxLength": 253 },
+        "supplierId": { "type": "string", "maxLength": 128 },
+        "supplierName": { "type": "string", "maxLength": 150 },
+        "articleTitle": { "type": "string", "maxLength": 300 },
+        "articleContentUrl": { "type": "string", "maxLength": 500 },
+        "targetUrl": { "type": "string", "maxLength": 500 },
+        "anchorText": { "type": "string", "maxLength": 250 },
+        "clientPrice": { "type": "number" },
+        "supplierCost": { "type": "number" },
+        "additionalExpenses": { "type": "number" },
+        "netProfit": { "type": "number" },
+        "profitMargin": { "type": "number" },
+        "paymentStatus": { "type": "string", "maxLength": 40, "enum": ["Unpaid", "Partial", "Paid", "Refunded"] },
+        "supplierPaymentStatus": { "type": "string", "maxLength": 40, "enum": ["Unpaid", "Paid"] },
+        "status": {
+          "type": "string",
+          "maxLength": 50,
+          "enum": [
+            "NEW LEAD", "REQUIREMENTS CONFIRMED", "QUOTATION SENT", "CLIENT APPROVED",
+            "PAYMENT RECEIVED", "SUPPLIER CONTACTED", "ARTICLE SUBMITTED",
+            "PUBLISHER APPROVED", "PUBLISHED", "BACKLINK VERIFIED", "DELIVERED"
+          ]
+        },
+        "publicationUrl": { "type": "string", "maxLength": 500 },
+        "backlinkVerificationStatus": {
+          "type": "string",
+          "maxLength": 50,
+          "enum": ["Unverified", "Verified", "Link Missing", "Wrong Rel Attribute", "Verification Inconclusive"]
+        },
+        "backlinkRelAttribute": { "type": "string", "maxLength": 100 },
+        "lastVerifiedAt": { "type": "string", "maxLength": 50 },
+        "deliveryDate": { "type": "string", "maxLength": 50 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "orderNumber", "clientId", "clientName", "websiteId", "websiteDomain",
+        "supplierId", "supplierName", "articleTitle", "articleContentUrl", "targetUrl",
+        "anchorText", "clientPrice", "supplierCost", "additionalExpenses", "netProfit",
+        "profitMargin", "paymentStatus", "supplierPaymentStatus", "status",
+        "publicationUrl", "backlinkVerificationStatus", "backlinkRelAttribute",
+        "lastVerifiedAt", "deliveryDate", "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Quotation, client invoice, or supplier payment record with estimated and actual profit tracking.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "referenceNumber": { "type": "string", "maxLength": 60 },
+        "docType": { "type": "string", "maxLength": 40, "enum": ["Quotation", "Invoice", "Supplier Payment"] },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientEmail": { "type": "string", "maxLength": 254 },
+        "websiteDomain": { "type": "string", "maxLength": 253 },
+        "sellingPrice": { "type": "number" },
+        "wholesaleCost": { "type": "number" },
+        "additionalExpenses": { "type": "number" },
+        "estimatedProfit": { "type": "number" },
+        "profitMargin": { "type": "number" },
+        "status": { "type": "string", "maxLength": 40, "enum": ["Draft", "Sent", "Approved", "Unpaid", "Paid", "Overdue", "Cancelled"] },
+        "dueDate": { "type": "string", "maxLength": 40 },
+        "paidAt": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "referenceNumber", "docType", "orderId", "clientId", "clientName",
+        "clientEmail", "websiteDomain", "sellingPrice", "wholesaleCost",
+        "additionalExpenses", "estimatedProfit", "profitMargin", "status",
+        "dueDate", "paidAt", "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "Outreach": {
+      "title": "Outreach",
+      "description": "Saved email draft and outreach communication record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "templateCategory": {
+          "type": "string",
+          "maxLength": 60,
+          "enum": [
+            "Publisher Outreach", "Price Negotiation", "Guest Post Request",
+            "Client Quotation", "Payment Confirmation", "Follow-up Email", "Delivery Notification"
+          ]
+        },
+        "recipientName": { "type": "string", "maxLength": 150 },
+        "recipientEmail": { "type": "string", "maxLength": 254 },
+        "relatedWebsiteOrOrder": { "type": "string", "maxLength": 253 },
+        "subject": { "type": "string", "maxLength": 300 },
+        "body": { "type": "string", "maxLength": 5000 },
+        "status": { "type": "string", "maxLength": 40, "enum": ["Draft Saved", "Opened in Mail Client", "Confirmed Sent"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "templateCategory", "recipientName", "recipientEmail",
+        "relatedWebsiteOrOrder", "subject", "body", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "Backlink verification and client delivery report record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "clientEmail": { "type": "string", "maxLength": 254 },
+        "publisherWebsite": { "type": "string", "maxLength": 253 },
+        "publishedArticleUrl": { "type": "string", "maxLength": 500 },
+        "targetUrl": { "type": "string", "maxLength": 500 },
+        "anchorText": { "type": "string", "maxLength": 250 },
+        "backlinkType": { "type": "string", "maxLength": 60 },
+        "relAttribute": { "type": "string", "maxLength": 100 },
+        "httpStatus": { "type": "number" },
+        "pageAccessible": { "type": "boolean" },
+        "targetLinkFound": { "type": "boolean" },
+        "anchorMatched": { "type": "boolean" },
+        "verificationStatus": {
+          "type": "string",
+          "maxLength": 50,
+          "enum": ["Verified", "Link Missing", "Anchor Mismatch", "Verification Inconclusive"]
+        },
+        "verifiedAt": { "type": "string", "maxLength": 50 },
+        "orderDate": { "type": "string", "maxLength": 50 },
+        "deliveryDate": { "type": "string", "maxLength": 50 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "orderId", "orderNumber", "clientName", "clientEmail",
+        "publisherWebsite", "publishedArticleUrl", "targetUrl", "anchorText",
+        "backlinkType", "relAttribute", "httpStatus", "pageAccessible",
+        "targetLinkFound", "anchorMatched", "verificationStatus", "verifiedAt",
+        "orderDate", "deliveryDate", "notes", "createdAt", "updatedAt"
+      ]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Business configuration and invoice/report settings for the reseller workspace.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessName": { "type": "string", "maxLength": 150 },
+        "adminEmail": { "type": "string", "maxLength": 254 },
+        "additionalAdminEmails": { "type": "string", "maxLength": 1000 },
+        "defaultCurrency": { "type": "string", "maxLength": 10 },
+        "defaultPaymentTerms": { "type": "string", "maxLength": 200 },
+        "invoiceFooterNotes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "businessName", "adminEmail", "additionalAdminEmails",
+        "defaultCurrency", "defaultPaymentTerms", "invoiceFooterNotes",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Immutable audit log of actions across GuestPilot AI modules.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorEmail": { "type": "string", "maxLength": 254 },
+        "module": { "type": "string", "maxLength": 60 },
+        "action": { "type": "string", "maxLength": 120 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "actorEmail", "module", "action", "entityId", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": "AdminRecord",
+      "description": "Explicitly authorized administrator UIDs."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Authorized administrator user profile documents."
+    },
+    "/websites/{websiteId}": {
+      "schema": "Website",
+      "description": "Publisher websites inventory."
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Publishers and wholesale suppliers."
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Client CRM records."
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Inbound and outbound sales leads."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Guest post reseller orders."
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Quotations, invoices, and payment ledger."
+    },
+    "/outreach/{outreachId}": {
+      "schema": "Outreach",
+      "description": "Outreach email drafts and communication records."
+    },
+    "/deliveries/{deliveryId}": {
+      "schema": "Delivery",
+      "description": "Backlink verification and delivery report records."
+    },
+    "/settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Business workspace configuration."
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Audit trail of business operations."
+    }
+  }
+}

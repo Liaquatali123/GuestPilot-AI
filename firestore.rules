@@ -1,0 +1,564 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'appbuilder078@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // Entity Validation Blueprints
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'addedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'addedBy', 'createdAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.addedBy is string && data.addedBy == request.auth.uid && data.addedBy.size() <= 128
+        && data.createdAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['ownerId', 'email', 'displayName', 'lastLoginAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'email', 'displayName', 'lastLoginAt', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.lastLoginAt is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWebsite(data) {
+      return data.keys().hasAll([
+          'ownerId', 'domain', 'websiteUrl', 'niche', 'country', 'language',
+          'da', 'dr', 'organicTraffic', 'spamScore', 'metricsSource',
+          'backlinkType', 'guestPostPrice', 'sponsoredPostPrice',
+          'contactEmail', 'publisherName', 'websiteStatus', 'verificationDate',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'domain', 'websiteUrl', 'niche', 'country', 'language',
+          'da', 'dr', 'organicTraffic', 'spamScore', 'metricsSource',
+          'backlinkType', 'guestPostPrice', 'sponsoredPostPrice',
+          'contactEmail', 'publisherName', 'websiteStatus', 'verificationDate',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.domain is string && data.domain.size() >= 3 && data.domain.size() <= 253
+        && data.websiteUrl is string && data.websiteUrl.size() >= 4 && data.websiteUrl.size() <= 500
+        && data.niche is string && data.niche.size() >= 1 && data.niche.size() <= 100
+        && data.country is string && data.country.size() >= 1 && data.country.size() <= 100
+        && data.language is string && data.language.size() >= 1 && data.language.size() <= 100
+        && (data.da is int || data.da is float) && data.da >= -1 && data.da <= 100
+        && (data.dr is int || data.dr is float) && data.dr >= -1 && data.dr <= 100
+        && (data.organicTraffic is int || data.organicTraffic is float) && data.organicTraffic >= -1 && data.organicTraffic <= 1000000000
+        && (data.spamScore is int || data.spamScore is float) && data.spamScore >= -1 && data.spamScore <= 100
+        && data.metricsSource is string && data.metricsSource.size() >= 1 && data.metricsSource.size() <= 120
+        && data.backlinkType is string && data.backlinkType.size() <= 40 && data.backlinkType in ['Dofollow', 'Nofollow', 'Sponsored', 'Mixed', 'Unknown']
+        && (data.guestPostPrice is int || data.guestPostPrice is float) && data.guestPostPrice >= 0 && data.guestPostPrice <= 1000000
+        && (data.sponsoredPostPrice is int || data.sponsoredPostPrice is float) && data.sponsoredPostPrice >= 0 && data.sponsoredPostPrice <= 1000000
+        && data.contactEmail is string && data.contactEmail.size() <= 254
+        && data.publisherName is string && data.publisherName.size() <= 150
+        && data.websiteStatus is string && data.websiteStatus.size() <= 40 && data.websiteStatus in ['Verified', 'Pending Review', 'Inactive', 'Blacklisted']
+        && data.verificationDate is string && data.verificationDate.size() <= 40
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll([
+          'ownerId', 'supplierName', 'email', 'website', 'country', 'niche',
+          'wholesalePrice', 'quotedPrice', 'quotationNotes', 'acceptedLinkTypes',
+          'articleWordLimits', 'publishingTime', 'permanentLinkAvailability',
+          'homepageLinkAvailability', 'paymentStatus', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'supplierName', 'email', 'website', 'country', 'niche',
+          'wholesalePrice', 'quotedPrice', 'quotationNotes', 'acceptedLinkTypes',
+          'articleWordLimits', 'publishingTime', 'permanentLinkAvailability',
+          'homepageLinkAvailability', 'paymentStatus', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.supplierName is string && data.supplierName.size() >= 1 && data.supplierName.size() <= 150
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.website is string && data.website.size() <= 500
+        && data.country is string && data.country.size() <= 100
+        && data.niche is string && data.niche.size() <= 100
+        && (data.wholesalePrice is int || data.wholesalePrice is float) && data.wholesalePrice >= 0 && data.wholesalePrice <= 1000000
+        && (data.quotedPrice is int || data.quotedPrice is float) && data.quotedPrice >= 0 && data.quotedPrice <= 1000000
+        && data.quotationNotes is string && data.quotationNotes.size() <= 1000
+        && data.acceptedLinkTypes is string && data.acceptedLinkTypes.size() <= 120
+        && data.articleWordLimits is string && data.articleWordLimits.size() <= 120
+        && data.publishingTime is string && data.publishingTime.size() <= 100
+        && data.permanentLinkAvailability is string && data.permanentLinkAvailability.size() <= 40 && data.permanentLinkAvailability in ['Yes', 'No', '12 Months', 'Unknown']
+        && data.homepageLinkAvailability is string && data.homepageLinkAvailability.size() <= 40 && data.homepageLinkAvailability in ['Yes', 'No', 'Extra Fee', 'Unknown']
+        && data.paymentStatus is string && data.paymentStatus.size() <= 40 && data.paymentStatus in ['Paid', 'Unpaid', 'Partial', 'No Active Balance']
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll([
+          'ownerId', 'clientName', 'email', 'company', 'country', 'website',
+          'requiredNiche', 'budget', 'requirements', 'leadStatus', 'notes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'clientName', 'email', 'company', 'country', 'website',
+          'requiredNiche', 'budget', 'requirements', 'leadStatus', 'notes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 150
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.company is string && data.company.size() <= 150
+        && data.country is string && data.country.size() <= 100
+        && data.website is string && data.website.size() <= 500
+        && data.requiredNiche is string && data.requiredNiche.size() <= 150
+        && (data.budget is int || data.budget is float) && data.budget >= 0 && data.budget <= 10000000
+        && data.requirements is string && data.requirements.size() <= 2000
+        && data.leadStatus is string && data.leadStatus.size() <= 40 && data.leadStatus in ['New Lead', 'Contacted', 'Quotation Sent', 'Negotiating', 'Active Client', 'Inactive']
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLead(data) {
+      return data.keys().hasAll([
+          'ownerId', 'prospectName', 'email', 'company', 'country', 'website',
+          'requiredNiche', 'estimatedBudget', 'source', 'status', 'requirements',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'prospectName', 'email', 'company', 'country', 'website',
+          'requiredNiche', 'estimatedBudget', 'source', 'status', 'requirements',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.prospectName is string && data.prospectName.size() >= 1 && data.prospectName.size() <= 150
+        && data.email is string && data.email.size() <= 254
+        && data.company is string && data.company.size() <= 150
+        && data.country is string && data.country.size() <= 100
+        && data.website is string && data.website.size() <= 500
+        && data.requiredNiche is string && data.requiredNiche.size() <= 150
+        && (data.estimatedBudget is int || data.estimatedBudget is float) && data.estimatedBudget >= 0 && data.estimatedBudget <= 10000000
+        && data.source is string && data.source.size() <= 100
+        && data.status is string && data.status.size() <= 40 && data.status in ['New', 'Contacted', 'Qualified', 'Quotation Sent', 'Converted', 'Lost']
+        && data.requirements is string && data.requirements.size() <= 2000
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+          'ownerId', 'orderNumber', 'clientId', 'clientName', 'websiteId', 'websiteDomain',
+          'supplierId', 'supplierName', 'articleTitle', 'articleContentUrl', 'targetUrl',
+          'anchorText', 'clientPrice', 'supplierCost', 'additionalExpenses', 'netProfit',
+          'profitMargin', 'paymentStatus', 'supplierPaymentStatus', 'status',
+          'publicationUrl', 'backlinkVerificationStatus', 'backlinkRelAttribute',
+          'lastVerifiedAt', 'deliveryDate', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'orderNumber', 'clientId', 'clientName', 'websiteId', 'websiteDomain',
+          'supplierId', 'supplierName', 'articleTitle', 'articleContentUrl', 'targetUrl',
+          'anchorText', 'clientPrice', 'supplierCost', 'additionalExpenses', 'netProfit',
+          'profitMargin', 'paymentStatus', 'supplierPaymentStatus', 'status',
+          'publicationUrl', 'backlinkVerificationStatus', 'backlinkRelAttribute',
+          'lastVerifiedAt', 'deliveryDate', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.orderNumber is string && data.orderNumber.size() >= 1 && data.orderNumber.size() <= 50
+        && data.clientId is string && data.clientId.size() <= 128
+        && data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 150
+        && data.websiteId is string && data.websiteId.size() <= 128
+        && data.websiteDomain is string && data.websiteDomain.size() >= 1 && data.websiteDomain.size() <= 253
+        && data.supplierId is string && data.supplierId.size() <= 128
+        && data.supplierName is string && data.supplierName.size() <= 150
+        && data.articleTitle is string && data.articleTitle.size() <= 300
+        && data.articleContentUrl is string && data.articleContentUrl.size() <= 500
+        && data.targetUrl is string && data.targetUrl.size() <= 500
+        && data.anchorText is string && data.anchorText.size() <= 250
+        && (data.clientPrice is int || data.clientPrice is float) && data.clientPrice >= 0 && data.clientPrice <= 1000000
+        && (data.supplierCost is int || data.supplierCost is float) && data.supplierCost >= 0 && data.supplierCost <= 1000000
+        && (data.additionalExpenses is int || data.additionalExpenses is float) && data.additionalExpenses >= 0 && data.additionalExpenses <= 1000000
+        && (data.netProfit is int || data.netProfit is float) && data.netProfit >= -1000000 && data.netProfit <= 1000000
+        && (data.profitMargin is int || data.profitMargin is float) && data.profitMargin >= -1000 && data.profitMargin <= 1000
+        && data.paymentStatus is string && data.paymentStatus.size() <= 40 && data.paymentStatus in ['Unpaid', 'Partial', 'Paid', 'Refunded']
+        && data.supplierPaymentStatus is string && data.supplierPaymentStatus.size() <= 40 && data.supplierPaymentStatus in ['Unpaid', 'Paid']
+        && data.status is string && data.status.size() <= 50 && data.status in [
+          'NEW LEAD', 'REQUIREMENTS CONFIRMED', 'QUOTATION SENT', 'CLIENT APPROVED',
+          'PAYMENT RECEIVED', 'SUPPLIER CONTACTED', 'ARTICLE SUBMITTED',
+          'PUBLISHER APPROVED', 'PUBLISHED', 'BACKLINK VERIFIED', 'DELIVERED'
+        ]
+        && data.publicationUrl is string && data.publicationUrl.size() <= 500
+        && data.backlinkVerificationStatus is string && data.backlinkVerificationStatus.size() <= 50 && data.backlinkVerificationStatus in [
+          'Unverified', 'Verified', 'Link Missing', 'Wrong Rel Attribute', 'Verification Inconclusive'
+        ]
+        && data.backlinkRelAttribute is string && data.backlinkRelAttribute.size() <= 100
+        && data.lastVerifiedAt is string && data.lastVerifiedAt.size() <= 50
+        && data.deliveryDate is string && data.deliveryDate.size() <= 50
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll([
+          'ownerId', 'referenceNumber', 'docType', 'orderId', 'clientId', 'clientName',
+          'clientEmail', 'websiteDomain', 'sellingPrice', 'wholesaleCost',
+          'additionalExpenses', 'estimatedProfit', 'profitMargin', 'status',
+          'dueDate', 'paidAt', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'referenceNumber', 'docType', 'orderId', 'clientId', 'clientName',
+          'clientEmail', 'websiteDomain', 'sellingPrice', 'wholesaleCost',
+          'additionalExpenses', 'estimatedProfit', 'profitMargin', 'status',
+          'dueDate', 'paidAt', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.referenceNumber is string && data.referenceNumber.size() >= 1 && data.referenceNumber.size() <= 60
+        && data.docType is string && data.docType.size() <= 40 && data.docType in ['Quotation', 'Invoice', 'Supplier Payment']
+        && data.orderId is string && data.orderId.size() <= 128
+        && data.clientId is string && data.clientId.size() <= 128
+        && data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 150
+        && data.clientEmail is string && data.clientEmail.size() <= 254
+        && data.websiteDomain is string && data.websiteDomain.size() <= 253
+        && (data.sellingPrice is int || data.sellingPrice is float) && data.sellingPrice >= 0 && data.sellingPrice <= 1000000
+        && (data.wholesaleCost is int || data.wholesaleCost is float) && data.wholesaleCost >= 0 && data.wholesaleCost <= 1000000
+        && (data.additionalExpenses is int || data.additionalExpenses is float) && data.additionalExpenses >= 0 && data.additionalExpenses <= 1000000
+        && (data.estimatedProfit is int || data.estimatedProfit is float) && data.estimatedProfit >= -1000000 && data.estimatedProfit <= 1000000
+        && (data.profitMargin is int || data.profitMargin is float) && data.profitMargin >= -1000 && data.profitMargin <= 1000
+        && data.status is string && data.status.size() <= 40 && data.status in ['Draft', 'Sent', 'Approved', 'Unpaid', 'Paid', 'Overdue', 'Cancelled']
+        && data.dueDate is string && data.dueDate.size() <= 40
+        && data.paidAt is string && data.paidAt.size() <= 40
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOutreach(data) {
+      return data.keys().hasAll([
+          'ownerId', 'templateCategory', 'recipientName', 'recipientEmail',
+          'relatedWebsiteOrOrder', 'subject', 'body', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'templateCategory', 'recipientName', 'recipientEmail',
+          'relatedWebsiteOrOrder', 'subject', 'body', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.templateCategory is string && data.templateCategory.size() <= 60 && data.templateCategory in [
+          'Publisher Outreach', 'Price Negotiation', 'Guest Post Request',
+          'Client Quotation', 'Payment Confirmation', 'Follow-up Email', 'Delivery Notification'
+        ]
+        && data.recipientName is string && data.recipientName.size() <= 150
+        && data.recipientEmail is string && data.recipientEmail.size() <= 254
+        && data.relatedWebsiteOrOrder is string && data.relatedWebsiteOrOrder.size() <= 253
+        && data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 300
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 5000
+        && data.status is string && data.status.size() <= 40 && data.status in ['Draft Saved', 'Opened in Mail Client', 'Confirmed Sent']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDelivery(data) {
+      return data.keys().hasAll([
+          'ownerId', 'orderId', 'orderNumber', 'clientName', 'clientEmail',
+          'publisherWebsite', 'publishedArticleUrl', 'targetUrl', 'anchorText',
+          'backlinkType', 'relAttribute', 'httpStatus', 'pageAccessible',
+          'targetLinkFound', 'anchorMatched', 'verificationStatus', 'verifiedAt',
+          'orderDate', 'deliveryDate', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'orderId', 'orderNumber', 'clientName', 'clientEmail',
+          'publisherWebsite', 'publishedArticleUrl', 'targetUrl', 'anchorText',
+          'backlinkType', 'relAttribute', 'httpStatus', 'pageAccessible',
+          'targetLinkFound', 'anchorMatched', 'verificationStatus', 'verifiedAt',
+          'orderDate', 'deliveryDate', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.orderId is string && data.orderId.size() <= 128
+        && data.orderNumber is string && data.orderNumber.size() <= 50
+        && data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 150
+        && data.clientEmail is string && data.clientEmail.size() <= 254
+        && data.publisherWebsite is string && data.publisherWebsite.size() >= 1 && data.publisherWebsite.size() <= 253
+        && data.publishedArticleUrl is string && data.publishedArticleUrl.size() >= 4 && data.publishedArticleUrl.size() <= 500
+        && data.targetUrl is string && data.targetUrl.size() >= 4 && data.targetUrl.size() <= 500
+        && data.anchorText is string && data.anchorText.size() <= 250
+        && data.backlinkType is string && data.backlinkType.size() <= 60
+        && data.relAttribute is string && data.relAttribute.size() <= 100
+        && (data.httpStatus is int || data.httpStatus is float) && data.httpStatus >= 0 && data.httpStatus <= 999
+        && data.pageAccessible is bool
+        && data.targetLinkFound is bool
+        && data.anchorMatched is bool
+        && data.verificationStatus is string && data.verificationStatus.size() <= 50 && data.verificationStatus in [
+          'Verified', 'Link Missing', 'Anchor Mismatch', 'Verification Inconclusive'
+        ]
+        && data.verifiedAt is string && data.verifiedAt.size() <= 50
+        && data.orderDate is string && data.orderDate.size() <= 50
+        && data.deliveryDate is string && data.deliveryDate.size() <= 50
+        && data.notes is string && data.notes.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSetting(data) {
+      return data.keys().hasAll([
+          'ownerId', 'businessName', 'adminEmail', 'additionalAdminEmails',
+          'defaultCurrency', 'defaultPaymentTerms', 'invoiceFooterNotes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'businessName', 'adminEmail', 'additionalAdminEmails',
+          'defaultCurrency', 'defaultPaymentTerms', 'invoiceFooterNotes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.businessName is string && data.businessName.size() >= 1 && data.businessName.size() <= 150
+        && data.adminEmail is string && data.adminEmail.size() >= 3 && data.adminEmail.size() <= 254
+        && data.additionalAdminEmails is string && data.additionalAdminEmails.size() <= 1000
+        && data.defaultCurrency is string && data.defaultCurrency.size() >= 1 && data.defaultCurrency.size() <= 10
+        && data.defaultPaymentTerms is string && data.defaultPaymentTerms.size() <= 200
+        && data.invoiceFooterNotes is string && data.invoiceFooterNotes.size() <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['ownerId', 'actorEmail', 'module', 'action', 'entityId', 'details', 'createdAt'])
+        && data.keys().hasOnly(['ownerId', 'actorEmail', 'module', 'action', 'entityId', 'details', 'createdAt'])
+        && data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.actorEmail is string && data.actorEmail.size() >= 3 && data.actorEmail.size() <= 254
+        && data.module is string && data.module.size() >= 1 && data.module.size() <= 60
+        && data.action is string && data.action.size() >= 1 && data.action.size() <= 120
+        && data.entityId is string && data.entityId.size() <= 128
+        && data.details is string && data.details.size() <= 1000
+        && data.createdAt is timestamp;
+    }
+
+    // Collection Match Blocks
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isBootstrappedAdmin());
+      allow list: if isBootstrappedAdmin() && existing().addedBy == request.auth.uid;
+      allow create: if isBootstrappedAdmin() && isValidId(adminId) && isValidAdminRecord(incoming()) && incoming().uid == adminId && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isBootstrappedAdmin() && isValidId(adminId);
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && (resource == null || existing().ownerId == request.auth.uid) && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUserProfile(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUserProfile(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'lastLoginAt', 'updatedAt'])
+        && isAdmin();
+      allow delete: if false;
+    }
+
+    match /websites/{websiteId} {
+      allow get: if isSignedIn() && isValidId(websiteId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(websiteId) && isValidWebsite(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(websiteId) && isValidWebsite(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'domain', 'websiteUrl', 'niche', 'country', 'language',
+          'da', 'dr', 'organicTraffic', 'spamScore', 'metricsSource',
+          'backlinkType', 'guestPostPrice', 'sponsoredPostPrice',
+          'contactEmail', 'publisherName', 'websiteStatus', 'verificationDate',
+          'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(websiteId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /suppliers/{supplierId} {
+      allow get: if isSignedIn() && isValidId(supplierId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(supplierId) && isValidSupplier(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(supplierId) && isValidSupplier(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'supplierName', 'email', 'website', 'country', 'niche',
+          'wholesalePrice', 'quotedPrice', 'quotationNotes', 'acceptedLinkTypes',
+          'articleWordLimits', 'publishingTime', 'permanentLinkAvailability',
+          'homepageLinkAvailability', 'paymentStatus', 'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(supplierId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow get: if isSignedIn() && isValidId(clientId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(clientId) && isValidClient(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(clientId) && isValidClient(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'clientName', 'email', 'company', 'country', 'website',
+          'requiredNiche', 'budget', 'requirements', 'leadStatus', 'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(clientId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /leads/{leadId} {
+      allow get: if isSignedIn() && isValidId(leadId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(leadId) && isValidLead(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(leadId) && isValidLead(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'prospectName', 'email', 'company', 'country', 'website',
+          'requiredNiche', 'estimatedBudget', 'source', 'status', 'requirements', 'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(leadId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && isValidId(orderId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(orderId) && isValidOrder(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(orderId) && isValidOrder(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'orderNumber', 'clientId', 'clientName', 'websiteId', 'websiteDomain',
+          'supplierId', 'supplierName', 'articleTitle', 'articleContentUrl', 'targetUrl',
+          'anchorText', 'clientPrice', 'supplierCost', 'additionalExpenses', 'netProfit',
+          'profitMargin', 'paymentStatus', 'supplierPaymentStatus', 'status',
+          'publicationUrl', 'backlinkVerificationStatus', 'backlinkRelAttribute',
+          'lastVerifiedAt', 'deliveryDate', 'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(orderId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isSignedIn() && isValidId(paymentId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(paymentId) && isValidPayment(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(paymentId) && isValidPayment(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'referenceNumber', 'docType', 'orderId', 'clientId', 'clientName',
+          'clientEmail', 'websiteDomain', 'sellingPrice', 'wholesaleCost',
+          'additionalExpenses', 'estimatedProfit', 'profitMargin', 'status',
+          'dueDate', 'paidAt', 'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(paymentId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /outreach/{outreachId} {
+      allow get: if isSignedIn() && isValidId(outreachId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(outreachId) && isValidOutreach(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(outreachId) && isValidOutreach(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'templateCategory', 'recipientName', 'recipientEmail',
+          'relatedWebsiteOrOrder', 'subject', 'body', 'status', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(outreachId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /deliveries/{deliveryId} {
+      allow get: if isSignedIn() && isValidId(deliveryId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(deliveryId) && isValidDelivery(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(deliveryId) && isValidDelivery(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'orderId', 'orderNumber', 'clientName', 'clientEmail',
+          'publisherWebsite', 'publishedArticleUrl', 'targetUrl', 'anchorText',
+          'backlinkType', 'relAttribute', 'httpStatus', 'pageAccessible',
+          'targetLinkFound', 'anchorMatched', 'verificationStatus', 'verifiedAt',
+          'orderDate', 'deliveryDate', 'notes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if isSignedIn() && isValidId(deliveryId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId) && request.auth.uid == settingId && (resource == null || existing().ownerId == request.auth.uid) && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(settingId) && request.auth.uid == settingId && isValidSetting(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(settingId) && request.auth.uid == settingId && isValidSetting(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'businessName', 'adminEmail', 'additionalAdminEmails',
+          'defaultCurrency', 'defaultPaymentTerms', 'invoiceFooterNotes', 'updatedAt'
+        ])
+        && isAdmin();
+      allow delete: if false;
+    }
+
+    match /activityLogs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && existing().ownerId == request.auth.uid && isAdmin();
+      allow list: if isBootstrappedAdmin() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(logId) && isValidActivityLog(incoming()) && incoming().createdAt == request.time && isAdmin();
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(logId) && existing().ownerId == request.auth.uid && isAdmin();
+    }
+  }
+}
